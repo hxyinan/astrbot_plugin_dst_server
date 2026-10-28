@@ -1,0 +1,20 @@
+# 运行时生成，不入库
+tool_index.json
+uid_save_index.json
+.fd_gourmet100_seen.json
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# 备份文件
+*.bak
+*.bak-*
+*.bak_*
+
+# 系统
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+name: astrbot_plugin_dst_server
+version: 2.2.0
+author: Hermes
+description: 饥荒独立服务器大模型AI管家插件（支持群内@机器人自然语言思考、大模型函数调用、权限校验、服务器管理）
+repo: "https://github.com/hxyinan/astrbot_plugin_dst_server"
+main: main.py

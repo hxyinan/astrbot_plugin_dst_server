@@ -1,0 +1,42 @@
+{
+  "target_group_id": {
+    "description": "饥荒专属 QQ 群号（必填，不填则任何群都按普通群处理）",
+    "type": "string",
+    "default": ""
+  },
+  "master_qq": {
+    "description": "机器人主人 QQ 号（必填，用于私聊管理权限）",
+    "type": "string",
+    "default": ""
+  },
+  "server_name_1": {
+    "description": "1服展示名称",
+    "type": "string",
+    "default": "1服"
+  },
+  "server_name_2": {
+    "description": "2服展示名称",
+    "type": "string",
+    "default": "2服"
+  },
+  "mcp_endpoint": {
+    "description": "新面板 MCP 端点（dst-admin）",
+    "type": "string",
+    "default": "http://127.0.0.1:8888/mcp"
+  },
+  "mcp_token": {
+    "description": "MCP 接入密钥（面板「外部 AI 接入」里生成）",
+    "type": "string",
+    "default": ""
+  },
+  "mcp_room_id_1": {
+    "description": "1服的 roomId（面板内 base64，Cluster_1 = Q2x1c3Rlcl8x）",
+    "type": "string",
+    "default": ""
+  },
+  "mcp_room_id_2": {
+    "description": "2服的 roomId，未接入留空",
+    "type": "string",
+    "default": ""
+  }
+}
