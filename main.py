@@ -489,7 +489,7 @@ def _panel_tags(t) -> list:
 
 # ---- 工具语义索引：向量 + AI 场景词；MCP 工具指纹不变就直接复用缓存 ----
 _INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tool_index.json")
-_EMBED_MODEL = "Qwen/Qwen3-Embedding-8B"
+_EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 _EMBED_URL = "https://api.siliconflow.cn/v1/embeddings"
 _EMBED_DIM = 1024
 _INDEX_VERSION = "v8"   # 场景词 prompt 有实质改动时递增，指纹随之变化并自动重建
@@ -843,7 +843,7 @@ def _rerank(query: str, cand: list, top: int) -> list:
     try:
         import urllib.request
         docs = [_build_index_text(n, "", _tool_metas.get(n) or {}, []) for n in cand]
-        body = json.dumps({"model": "Qwen/Qwen3-Reranker-8B", "query": query, "documents": docs,
+        body = json.dumps({"model": "Qwen/Qwen3-Reranker-0.6B", "query": query, "documents": docs,
                            "top_n": top, "return_documents": False}).encode()
         req = urllib.request.Request("https://api.siliconflow.cn/v1/rerank", data=body, headers={
             "Authorization": f"Bearer {_embed_key()}", "Content-Type": "application/json"})

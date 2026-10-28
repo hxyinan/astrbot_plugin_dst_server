@@ -196,7 +196,7 @@ DST_CLUSTERS=Cluster_A,Cluster_B python3 scripts/get_dst_cpu.py
 - 营地百科依赖外部词条库，仓库只带查询脚本
 - 长文本回复会转成图片发送（依赖 AstrBot 的 t2i 模板）
 - 仅适配 OneBot v11（QQ）
-- 语义检索默认用硅基流动的 `Qwen3-Embedding-8B`，换服务需改 `_EMBED_MODEL` / `_EMBED_URL`
+- 语义检索默认用硅基流动的 `Qwen3-Embedding-0.6B`，换服务需改 `_EMBED_MODEL` / `_EMBED_URL`
 
 ---
 
