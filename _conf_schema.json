@@ -38,5 +38,15 @@
     "description": "2服的 roomId，未接入留空",
     "type": "string",
     "default": ""
+  },
+  "embed_api_key": {
+    "description": "向量检索用的 Embedding 密钥（硅基流动等 OpenAI 兼容服务；留空则读取环境变量 DST_EMBED_API_KEY，再回退到本机 Hindsight 配置；都没有则自动关闭语义检索，退回关键词检索）",
+    "type": "string",
+    "default": ""
+  },
+  "wiki_dir": {
+    "description": "百科词条库目录（一堆 .md 文件，一篇一个词条）。留空则按环境变量 DST_WIKI_DIR、~/vault/饥荒联机版 的顺序探测",
+    "type": "string",
+    "default": ""
   }
 }

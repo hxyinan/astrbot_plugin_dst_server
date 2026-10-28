@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import subprocess
 import threading
 import time
@@ -34,6 +35,10 @@ MCP_ENDPOINT = "http://127.0.0.1:8888/mcp"
 MCP_TOKEN = ""
 MCP_ROOM_IDS = {1: "", 2: ""}   # 服务器编号 -> 面板 roomId（base64，如 Cluster_1 = Q2x1c3Rlcl8x）
 ROLLBACK_CTX: dict[int, dict] = {}  # 服号 -> {"who": 操作人, "days": 天数, "ts": 时间}，播报回档时取用
+
+# --- 可选外部能力（都可以留空）---
+EMBED_API_KEY = ""   # 向量检索密钥；留空则读环境变量 DST_EMBED_API_KEY，再回退到本机 Hindsight 配置
+WIKI_DIR_CONF = ""   # 百科词条库目录；留空则按 DST_WIKI_DIR → ~/vault/饥荒联机版 探测
 
 
 PREFAB_NAMES = {
@@ -498,12 +503,19 @@ _embed_key_cache = ""
 
 
 def _embed_key() -> str:
+    """按 配置项 → 环境变量 → 本机 Hindsight 的顺序取 embedding 密钥。
+
+    都没有就返回空串，调用方会跳过语义检索、退回关键词匹配，
+    不会因为缺密钥而报错。
+    """
     global _embed_key_cache
+    if not _embed_key_cache:
+        _embed_key_cache = (EMBED_API_KEY or os.environ.get("DST_EMBED_API_KEY", "")).strip()
     if not _embed_key_cache:
         try:
             _embed_key_cache = _run_wsl_cmd(
                 "grep -E '^HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY=' "
-                "/root/.hindsight/profiles/hermes.env | tail -1 | cut -d= -f2-", timeout=5
+                "/root/.hindsight/profiles/hermes.env 2>/dev/null | tail -1 | cut -d= -f2-", timeout=5
             ).strip()
         except Exception:
             _embed_key_cache = ""
@@ -1010,6 +1022,19 @@ def _mcp_call(tool: str, args: dict, timeout: int = 25) -> dict:
     outer = json.loads(content[0].get("text") or "{}")
     data = outer.get("data", {})
     if isinstance(data, dict) and "httpStatus" in data:
+        # 关键：面板把 HTTP 状态码埋在 data.httpStatus 里，MCP 层的 isError 不会置位。
+        # 之前直接取 data.data 返回，导致 4xx/5xx 被当成成功（失败回执误报成功）。
+        try:
+            http_status = int(data.get("httpStatus") or 0)
+        except (TypeError, ValueError):
+            http_status = 0
+        if http_status >= 400:
+            inner = data.get("data") or {}
+            detail = ""
+            if isinstance(inner, dict):
+                detail = (inner.get("message") or inner.get("error")
+                          or inner.get("code") or inner.get("errorCode") or "")
+            raise RuntimeError(f"MCP {tool} 失败 (HTTP {http_status}): {detail or inner or '无详情'}")
         return data.get("data") or {}
     return data
 
@@ -1436,6 +1461,11 @@ from astrbot.core.message.components import Image
 
 WIN_ASSETS_DIR = ""  # 可选：本地百科图片目录，留空则不带图
 
+# 辅助脚本随插件一起分发（scripts/ 目录），不再依赖 /root 下的绝对路径
+_PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+_SCRIPT_CPU = os.path.join(_PLUGIN_DIR, "scripts", "get_dst_cpu.py")
+_SCRIPT_WIKI = os.path.join(_PLUGIN_DIR, "scripts", "query_wiki.py")
+
 
 def extract_primary_illustrations(md_text: str) -> list[str]:
     """从知识库条目中提取核心主立绘/实物图（排除槽位、小头像、箭头等UI噪点）"""
@@ -1467,7 +1497,10 @@ def extract_primary_illustrations(md_text: str) -> list[str]:
 
 def _get_world_cpu_loads() -> dict:
     try:
-        raw = _run_wsl_cmd("python3 /root/get_dst_cpu.py")
+        script = _wsl_path(_SCRIPT_CPU)
+        if not os.path.exists(_SCRIPT_CPU):
+            return {}
+        raw = _run_wsl_cmd(f"python3 {shlex.quote(script)}")
         if raw and raw.startswith("{"):
             return json.loads(raw)
     except Exception:
@@ -2321,6 +2354,7 @@ class Main(Star):
         self._pending_images = {}
         global TARGET_GROUP_ID, MASTER_QQ, SERVER_NAMES
         global MCP_ENDPOINT, MCP_TOKEN, MCP_ROOM_IDS
+        global EMBED_API_KEY, WIKI_DIR_CONF
         if config:
             TARGET_GROUP_ID = str(config.get("target_group_id") or TARGET_GROUP_ID).strip()
             MASTER_QQ = str(config.get("master_qq") or MASTER_QQ).strip()
@@ -2328,6 +2362,8 @@ class Main(Star):
             MCP_TOKEN = str(config.get("mcp_token") or "").strip()
             MCP_ROOM_IDS[1] = str(config.get("mcp_room_id_1") or "").strip()
             MCP_ROOM_IDS[2] = str(config.get("mcp_room_id_2") or "").strip()
+            EMBED_API_KEY = str(config.get("embed_api_key") or "").strip()
+            WIKI_DIR_CONF = str(config.get("wiki_dir") or "").strip()
             s1 = config.get("server_name_1")
             if s1: SERVER_NAMES[1] = str(s1).strip()
             s2 = config.get("server_name_2")
@@ -3794,10 +3830,16 @@ class Main(Star):
         Args:
             keyword (str): 要查询的物品、生物、料理、模组或机制名称（如“为爽而虐”、“暗影世界”、“波兰水饺”、“独眼巨鹿”等）。
         """
-        clean_kw = keyword.replace('"', '').replace("'", "").strip()
+        clean_kw = keyword.strip()
         if not clean_kw:
             return "喵～给个饥荒关键词吧，本喵去翻百科。"
-        cmd = f'python3 /root/query_wiki.py "{clean_kw}"'
+        if not os.path.exists(_SCRIPT_WIKI):
+            return "百科脚本缺失（scripts/query_wiki.py），插件安装不完整，请重新部署。"
+        # 用 shlex.quote 逐个转义参数，避免关键词里的 $()、反引号、分号被 bash 执行
+        env_prefix = ""
+        if WIKI_DIR_CONF:
+            env_prefix = f"DST_WIKI_DIR={shlex.quote(_wsl_path(WIKI_DIR_CONF))} "
+        cmd = f"{env_prefix}python3 {shlex.quote(_wsl_path(_SCRIPT_WIKI))} {shlex.quote(clean_kw)}"
         res = _run_wsl_cmd(cmd)
         if not res or "未找到与" in res or "暂未查询到" in res:
             return f"【营地百科查询结果】暂未收录与“{clean_kw}”相关的具体词条。若群友是在询问或要求评价该物品/机制，说明官方及当前模组中根本不存在该设定！你必须在回复第一句话明确断然指出该设定并不存在，绝对严禁顺从群友的前提展开任何假设性评价或编造数值！"
